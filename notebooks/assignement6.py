@@ -8,6 +8,10 @@ import pathlib
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 from enum import Enum
+from joblib import Parallel, delayed
+import random
+import numpy as np
+import time
 
 # %%
 class AreaType(Enum):
@@ -241,77 +245,46 @@ spawning_area = Polygon([[0, 0], [20, 0], [20, -7], [0, -7]])
 # ## Visual check
 # 
 
-# %%
-fig, axes = plt.subplots(ncols=3, nrows=1)
-
-for ax, (scenario_type, details) in zip(axes, scenario_details.items()):
-    pedpy.plot_walkable_area(
-        walkable_area=pedpy.WalkableArea(details["area"]), line_width=3, axes=ax
-    ).set_aspect("equal")
-    ax.fill(
-        *spawning_area.exterior.xy, color="lightgrey", alpha=0.5, label="Spawning Area"
-    )
-    ax.fill(*details["exit"].exterior.xy, color="indianred", alpha=0.7, label="Exit")
-
-    ax.set_ylim([-(6 + 75.4 + 6 + 2), 2])
-    for idx, waypoint in enumerate(details["waypoints"]):
-        ax.plot(waypoint[0], waypoint[1], "ro")
-        ax.annotate(
-            f"WP {idx+1}",
-            (waypoint[0], waypoint[1]),
-            textcoords="offset points",
-            xytext=(10, -15),
-            ha="center",
-        )
-        circle = Circle(
-            (waypoint[0], waypoint[1]),
-            details["distance_to_waypoints"],
-            fc="red",
-            ec="red",
-            alpha=0.1,
-        )
-        ax.add_patch(circle)
-    ax.set_title(scenario_type.name)
-
-plt.tight_layout()
 
 # %% [markdown]
 # ## Run simulations
 # 
+def run_single_simulation(scenario_type, details, seed, spawning_area):
+    positions = jps.distributions.distribute_by_number(
+        polygon=spawning_area,
+        number_of_agents=num_agents,
+        distance_to_agents=0.4,
+        distance_to_polygon=0.3,
+        seed=seed,
+    )
+    s = Scenario(
+        type=scenario_type,
+        area=details["area"],
+        exit=details["exit"],
+        positions=positions,
+        waypoints=details["waypoints"],
+        seed=seed,
+    )
+    return s.run_simulation()
+
 
 # %%
-import random
-num_agents = 500
+num_agents = 10
 evac_times = {}
 num_reps = 5
+
+evac_times = {}
+start = time.time()
 for scenario_type, details in scenario_details.items():
-    evac_times[scenario_type.name] = []
+    evac_times[scenario_type.name] = Parallel(n_jobs=-1)(delayed(run_single_simulation)(scenario_type, details, random.randint(1, 10000), spawning_area) for _ in range(num_reps))
 
-    for _ in range(num_reps):
-        seed = random.randint(1, 10000)
-        positions = jps.distributions.distribute_by_number(
-            polygon=spawning_area,
-            number_of_agents=num_agents,
-            distance_to_agents=0.4,
-            distance_to_polygon=0.3,
-            seed=seed,
-        )
-        s = Scenario(
-            type=scenario_type,
-            area=details["area"],
-            exit=details["exit"],
-            positions=positions,
-            waypoints=details["waypoints"],
-            seed=seed,
-        )
-        evac_time = s.run_simulation()
-        evac_times[scenario_type.name].append(evac_time)
-
+end = time.time()
+print(f"Exec time: {end-start:.2f} s.")
 # %% [markdown]
 # ## Plot results
 
 # %%
-import numpy as np
+
 
 mean_evac_times = {scenario: np.mean(times) for scenario, times in evac_times.items()}
 std_dev_evac_times = {scenario: np.std(times) for scenario, times in evac_times.items()}
