@@ -85,11 +85,17 @@ class Scenario:
 
         journey = jps.JourneyDescription([*waypoint_ids, exit_id])
         # from all waypoints ---> exit
-        for waypoint_id in waypoint_ids:
-            journey.set_transition_for_stage(
-                waypoint_id, jps.Transition.create_fixed_transition(exit_id)
-            )
 
+        for i, waypoint_id in enumerate(waypoint_ids):
+            other_goals = waypoint_ids[-3:-(3-i)][::-1] + [exit_id] 
+            print(i, other_goals)
+            journey.set_transition_for_stage(
+                waypoint_id, 
+                #jps.Transition.create_least_targeted_transition(other_goals)
+                jps.Transition.create_fixed_transition(exit_id)
+                
+            )
+        
         return journey, waypoint_ids
 
     def create_simulation(self) -> jps.Simulation:
@@ -123,9 +129,9 @@ class Scenario:
             else:
                 stage_ids = []
                 for pos in self.positions:
-                    if pos[0] > 18:
+                    if pos[0] > 15:
                         stage_ids.append(self.waypoint_ids[0])
-                    elif pos[0] > 8:
+                    elif pos[0] > 10:
                         stage_ids.append(self.waypoint_ids[1])
                     else:
                         stage_ids.append(self.waypoint_ids[2])    
@@ -264,6 +270,7 @@ def run_single_simulation(scenario_type, details, seed, spawning_area):
         positions=positions,
         waypoints=details["waypoints"],
         seed=seed,
+        distance_to_waypoints=details["distance_to_waypoints"]
     )
     return s.run_simulation()
 
